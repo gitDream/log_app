@@ -1,0 +1,4 @@
+Flask==0.12.2
+paramiko==2.4.1
+Flask-SocketIO==2.9.6
+Flask-MySQLdb==0.2.0

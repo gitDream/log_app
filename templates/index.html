@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>日志查看系统</title>
+    <link rel="stylesheet" href="/static/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/static/css/bootstrap-table.min.css">
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/css/bootstrap-datetimepicker.min.css">
+    <script src="/static/js/jquery.min.js"></script>
+    <script src="/static/js/bootstrap.min.js"></script>
+    <script src="/static/js/bootstrap-table.min.js"></script>
+    <script src="/static/js/moment.min.js"></script>
+    <script src="/static/js/bootstrap-datetimepicker.min.js"></script>
+    <script src="/static/js/socket.io.min.js"></script>
+</head>
+<body>
+<div class="row">
+    <div class="col-lg-offset-2 col-lg-8">
+        <h1 class="text-center">日志查看系统</h1>
+        <div class="panel panel-primary">
+            <div class="panel-heading">条件查询</div>
+            <div class="panel-body">
+                <form class="form-inline" role="form">
+                    <div class="form-group">
+                        <label class="control-label" for="SelectEnvironment">环境类型：</label>
+                        <select class="form-control" id="SelectEnvironment" onchange="refresh()">
+                            <option value="全部">全部</option>
+                            <option value="生产环境">生产环境</option>
+                            <option value="测试环境">测试环境</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label" for="SelectProject">所属项目：</label>
+                        <select class="form-control" id="SelectProject" onchange="refresh()"></select>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="InputComment" placeholder="搜索备注">
+                        <span class="input-group-btn">
+                            <button type="button" class="btn btn-default" onclick="refresh()">
+                                <span class="fa fa-search"></span>
+                            </button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <table></table>
+    </div>
+</div>
+
+<!--日志模态框-->
+<div id="LogModal" class="modal fade" data-backdrop="static">
+    <div class="modal-dialog" style="width: 80%;height: 92%">
+        <div class="modal-content" style="width: 100%;max-height: 100%;display: flex;flex-direction: column;">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title">日志内容</h4>
+            </div>
+            <div id="LogBody" class="modal-body" style="overflow: auto;flex: 1;"><ul></ul></div>
+        </div>
+    </div>
+</div>
+
+<!--查看最后N行模态框-->
+<div id="LastNLineModal" class="modal fade" data-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title">查看日志最后N行</h4>
+            </div>
+            <div class="modal-body">
+                <input id="LastNLineLineNumber" class="form-control" type="text" placeholder="（选填）请输入您想查看的行数，默认查看最后100行。">
+            </div>
+            <div class="modal-footer">
+                <button id="LastNLineConfirm" type="button" class="btn btn-primary">确定</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--关键字查看模态框-->
+<div id="KeywordModal" class="modal fade" data-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title">根据关键字查看日志</h4>
+            </div>
+            <div class="modal-body">
+                <form id="abc" class="form-horizontal">
+                    <div class="form-group">
+                        <div class="col-sm-12">
+                            <div class="input-group date">
+                                <input id="KeywordDate" class="form-control" type='text' placeholder="（选填）请选择您要查看日志的日期，默认查看当天的日志。">
+                                <span class="input-group-addon"><span class="fa fa-calendar"></span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-12">
+                            <input id="Keyword" class="form-control" type="text" placeholder="（选填）请输入您想查找的关键字，默认为ERROR。">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-12">
+                            <input id="KeywordLineNumber" class="form-control" type="text" placeholder="（选填）请输入您想显示的上下文的行数，默认显示10行。">
+                        </div>
+                    </div>
+                    <div class="radio">
+                        <label>
+                            <input type="radio" name="optionsRadios" value="B">
+                            显示关键字的上文
+                        </label>
+                    </div>
+                    <div class="radio">
+                        <label>
+                            <input type="radio" name="optionsRadios" value="C">
+                            显示关键字的上下文
+                        </label>
+                    </div>
+                    <div class="radio">
+                        <label>
+                            <input type="radio" name="optionsRadios" value="A" checked="checked">
+                            显示关键字的下文
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="KeywordConfirm" class="btn btn-primary" type="button">确定</button>
+                <button class="btn btn-default" type="button" data-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--根据时间段查看模态框-->
+<div id="TimeQuantmModal" class="modal fade" data-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title">请选择您要查看的时间段</h4>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <div class="input-group date">
+                        <input id="TimeQuantmDate" class="form-control" type='text' placeholder="（选填）请选择您想查看的日志的日期，默认为当天日期。">
+                        <span class="input-group-addon"><span class="fa fa-calendar"></span></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-group time">
+                        <input id="TimeQuantmStartTime" class="form-control" type='text' placeholder="（选填）开始时间，默认为0点。">
+                        <span class="input-group-addon"><span class="fa fa-clock-o"></span></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-group time">
+                        <input id="TimeQuantmEndTime" class="form-control" type='text' placeholder="（选填）结束时间，默认为24点。">
+                        <span class="input-group-addon"><span class="fa fa-clock-o"></span></span>
+                    </div>
+                </div>
+                <p class="text-warning">温馨提示：查看tomcat日志时，请勿选择跨度过大的时间段，否则可能会使浏览器卡死！</p>
+            </div>
+            <div class="modal-footer">
+                <button id="TimeQuantmConfirm" type="button" class="btn btn-primary">确定</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 设置“所属项目”下拉列表
+    function setSelectProject() {
+        $('#SelectProject').empty();
+        $('#SelectProject').append('<option value="全部">全部</option>');
+        $.get('/get_distinct/server_log/project/', function (data) {
+            data = JSON.parse(data);
+            $.each(data['project_list'], function () {
+                $('#SelectProject').append('<option value="' + this + '">' + this + '</option>');
+            });
+        });
+    }
+
+    // 格式化
+    function operateFormatter() {
+        return '<a href="javascript:void(0)" class="keyword">关键字查看</a>&emsp;' +
+            '<a href="javascript:void(0)" class="lastline">查看最后N行</a>&emsp;' +
+            '<a href="javascript:void(0)" class="trace">实时追踪</a>&emsp;' +
+            '<a href="javascript:void(0)" class="time_quantm">根据时间段查看</a>';
+    }
+
+    // 刷新表格
+    function refresh() {
+        $('table').bootstrapTable('refresh');
+    }
+
+    // 获取当天日期
+    function getCurrentDate() {
+        var d = new Date();
+        var Y = d.getFullYear();
+        var M = d.getMonth() + 1;
+        M = M > 9 ? M : '0' + M;
+        var D = d.getDate();
+        D = D > 9 ? D : '0' + D;
+        return new Array(Y, M, D).join('-');
+    }
+
+    // 将服务端发送的消息或缓存里的消息打印在日志模态框中
+    function printMessage(message) {
+        var el;
+        // 对“ERROR”关键词着红色
+        if (message.indexOf('ERROR') > 0) {
+            el = $('<li style="color:#FF0000"></li>');
+        } else {
+            el = $('<li></li>');
+        }
+        el.text(message);
+        $('#LogBody ul').append(el);
+        // 自动拖拉滚动条
+        var LogBody = document.getElementById('LogBody');
+        LogBody.scrollTop = Math.max(0, LogBody.scrollHeight - LogBody.offsetHeight);
+    }
+
+    // 连接socket
+    var socket = io.connect('http://' + window.location.host + '/');
+    //var socket = io.connect('http://' + window.location.host + '/');
+    // 缓存日志列表
+    var cache = [];
+    // 标记
+    var flag = true;
+
+    window.operateEvents = {
+        'click .lastline': function (e, value, row) {
+            $('#LastNLineModal').modal('show');
+            $('#LastNLineConfirm').unbind('click').bind('click', function () {
+                var line_number = $('#LastNLineLineNumber').val();
+                $('#LastNLineModal').modal('hide');
+                var room = String(Math.random());
+                socket.emit('join', room);
+                socket.emit('init', {
+                    'room': room,
+                    'id': row['id'],
+                    'order': 'lastline',
+                    'line_number': line_number ? line_number : 100
+                });
+                $('#LogModal').modal('show');
+            });
+        },
+        'click .trace': function (e, value, row) {
+            $('#LogModal .modal-content').append(
+                '<div class="modal-footer">\
+                    <button id="Pause" type="button" class="btn btn-primary">暂停追踪</button>\
+                    <button id="Continue" type="button" class="btn btn-primary" style="display: none;">继续追踪</button>\
+                </div>'
+            );
+            var room = String(Math.random());
+            socket.emit('join', room);
+            socket.emit('init', {
+                'room': room,
+                'id': row['id'],
+                'order': 'trace'
+            });
+            $('#Pause').click(function () {
+                $(this).hide();
+                $('#Continue').show();
+                flag = false;
+            });
+            $('#Continue').click(function () {
+                $(this).hide();
+                $('#Pause').show();
+                if (cache) {
+                    for (var i in cache) {
+                        printMessage(cache[i])
+                    }
+                }
+                flag = true;
+            });
+            $('#LogModal').modal('show');
+        },
+        'click .keyword': function (e, value, row) {
+            $('#KeywordModal').modal('show');
+            $('#KeywordConfirm').unbind('click').bind('click', function () {
+                var date = $('#KeywordDate').val();
+                var keyword = $('#Keyword').val();
+                var line_number = $('#KeywordLineNumber').val();
+                var show_way = $('input[name="optionsRadios"]:checked').val();
+                $('#KeywordModal').modal('hide');
+                var room = String(Math.random());
+                socket.emit('join', room);
+                socket.emit('init', {
+                    'room': room,
+                    'id': row['id'],
+                    'order': 'keyword',
+                    'date': date ? date : getCurrentDate(),
+                    'keyword': keyword ? keyword : 'ERROR',
+                    'line_number': line_number ? line_number : 10,
+                    'show_way': show_way
+                });
+                $('#LogModal').modal('show');
+            });
+        },
+        'click .time_quantm': function (e, value, row) {
+            $('#TimeQuantmModal').modal('show');
+            $('#TimeQuantmConfirm').unbind('click').bind('click', function () {
+                var date = $('#TimeQuantmDate').val();
+                var start_time = $('#TimeQuantmStartTime').val();
+                var end_time = $('#TimeQuantmEndTime').val();
+                $('#TimeQuantmModal').modal('hide');
+                var room = String(Math.random());
+                socket.emit('join', room);
+                socket.emit('init', {
+                    'room': room,
+                    'id': row['id'],
+                    'order': 'time_quantm',
+                    'date': date ? date : getCurrentDate(),
+                    'start_time': start_time ? start_time : '00:00:00',
+                    'end_time': end_time ? end_time : '24:59:59'
+                });
+                $('#LogModal').modal('show');
+            });
+        }
+    };
+
+    // 如果标记为真，就直接将数据打印到日志模态框，否则存入缓存。
+    socket.on('message', function (message) {
+        if (flag) {
+            printMessage(message)
+        } else {
+            cache.push(message);
+        }
+
+    });
+
+    $(document).ready(function () {
+        // 设置“所属项目”下拉列表的选项
+        setSelectProject();
+        // 初始化表格
+        $('table').bootstrapTable({
+            url: '/query/server_log/',
+            sidePagination: 'server',
+            pagination: true,
+            sortName: 'environment',
+            queryParams: function (params) {
+                return {
+                    limit: params.limit,
+                    offset: params.offset,
+                    search: params.search,
+                    sort: params.sort,
+                    order: params.order,
+                    environment: $('#SelectEnvironment').val(),
+                    project: $('#SelectProject').val(),
+                    comment: $('#InputComment').val()
+                }
+            },
+            columns: [
+                {field: 'id', visible: false},
+                {field: 'environment', title: '环境类型', sortable: true},
+                {field: 'project', title: '所属项目', sortable: true},
+                {field: 'comment', title: '备注', sortable: true},
+                {field: 'operation', title: '操作', events: operateEvents, formatter: operateFormatter}
+            ]
+        });
+        $('thead tr').attr('class', 'info');
+    });
+
+    // 设置日期选择器的值
+    $('.date').datetimepicker({
+        format: 'YYYY-MM-DD'
+    });
+
+    // 设置时间选择器的格式
+    $('.time').datetimepicker({
+        format: 'HH:mm:ss'
+    });
+
+    // 关闭“关键字查看”模态框时清空文本框和日期选择器的值
+    $('#KeywordModal').on('hide.bs.modal', function() {
+        $('#Keyword').val('');
+        $('#KeywordLineNumber').val('');
+        $(this).find('.date').data("DateTimePicker").clear();
+    });
+
+    // 关闭“根据时间段查看”模态框时清空日期和时间选择器的值
+    $('#TimeQuantmModal').on('hide.bs.modal', function () {
+        $(this).find('.date').data("DateTimePicker").clear();
+        $(this).find('.time').eq(0).data("DateTimePicker").clear();
+        $(this).find('.time').eq(1).data("DateTimePicker").clear();
+    });
+
+    // 关闭“查看最后N行”模态框时清空文本框内容
+    $('#LastNLineModal').on('hide.bs.modal', function() {
+        $('#LastNLineLineNumber').val('');
+    });
+
+    // 关闭“日志”模态框时向服务端发送关闭SSH连接的请求并清空所有日志和移除尾部
+    $('#LogModal').on('hide.bs.modal', function() {
+        $('#LogBody ul').empty();
+        $('#LogModal .modal-footer').remove();
+        socket.send('close');
+    });
+</script>
+</body>
+</html>
